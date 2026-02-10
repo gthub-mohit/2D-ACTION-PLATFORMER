@@ -1,76 +1,126 @@
 using UnityEngine;
 using System.Collections;
-
 public class PlayerAttack : MonoBehaviour
 {
-    public Transform Attackpoint;
-    public float attackrange = 0.5f;
+    [Header("Attack Settings")]
+    public Transform attackPoint;
+    public float attackRange = 0.5f;
     public LayerMask enemyLayer;
     public float damage = 10f;
-    public float comboreset = 0.6f;
-    private int combostep = 0;
-    private float lastattacktime; 
-    public float knockbackforce = 5f;
-    public float hitstoptime = 0.05f;
+    [Header("Combo Settings")]
+    public float comboReset = 0.6f;
+    private int comboStep = 0;
+    private float lastAttackTime;
+    private bool canAttack = true;
+    [Header("Player Health")]
+    public int maxHealth = 100;
+    private int currentHealth;
+    private bool isHurt = false;
+    [Header("Feel Settings")]
+    public float knockbackForce = 5f;
+    public float hitStopTime = 0.05f;
+    private bool isHitStopping = false;
     public Animator anim;
-    private bool canattack = true;
-
-    void Update() 
+    private Rigidbody2D rb;
+    void Start()
     {
-        if (Input.GetKeyDown(KeyCode.J) && canattack)
+        rb = GetComponent<Rigidbody2D>();
+        currentHealth = maxHealth;
+    }
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.J) && canAttack && !isHurt)
         {
             HandleAttack();
         }
-
-        if (Time.time - lastattacktime > comboreset)
+        if (Time.time - lastAttackTime > comboReset)
         {
-            combostep = 0;
+            comboStep = 0;
         }
     }
-
     void HandleAttack()
     {
-        canattack = false;
-        lastattacktime = Time.time;
-        combostep++;
+        canAttack = false;
+        lastAttackTime = Time.time;
+        comboStep++;
 
-        if (combostep > 5) combostep = 1;
+        if (comboStep > 5) comboStep = 1;
 
-        if (anim != null) anim.SetTrigger("Attack" + combostep);
+        if (anim != null)
+            anim.SetTrigger("Attack" + comboStep);
     }
-
     public void DealDamage()
     {
-        Collider2D[] enemies = Physics2D.OverlapCircleAll(Attackpoint.position, attackrange, enemyLayer);
-        
+        if (attackPoint == null) return;
+        Collider2D[] enemies = Physics2D.OverlapCircleAll(
+            attackPoint.position,
+            attackRange,
+            enemyLayer
+        );
         foreach (Collider2D enemy in enemies)
         {
             Enemy enemyScript = enemy.GetComponent<Enemy>();
             if (enemyScript != null)
             {
                 enemyScript.TakeDamage(damage);
-
-                Rigidbody2D rb = enemy.GetComponent<Rigidbody2D>();
-                if (rb != null)
+                Rigidbody2D enemyRb = enemy.GetComponent<Rigidbody2D>();
+                if (enemyRb != null)
                 {
                     Vector2 dir = (enemy.transform.position - transform.position).normalized;
-                    rb.AddForce(dir * knockbackforce, ForceMode2D.Impulse); 
+                    enemyRb.AddForce(dir * knockbackForce, ForceMode2D.Impulse);
                 }
-                
-                StartCoroutine(Hitstop());
+                if (!isHitStopping)
+                    StartCoroutine(HitStop());
             }
         }
     }
-
-    IEnumerator Hitstop()
-    {
-        Time.timeScale = 0f;
-        yield return new WaitForSecondsRealtime(hitstoptime);
-        Time.timeScale = 1f;
-    }
-
     public void EndAttack()
     {
-        canattack = true;
+        canAttack = true;
+    }
+    public void TakeDamage(int damageAmount, Vector2 knockbackDir)
+    {
+        if (isHurt) return;
+        currentHealth -= damageAmount;
+        if (anim != null)
+            anim.SetTrigger("Hurt");
+        StartCoroutine(HurtRoutine(knockbackDir));
+        if (currentHealth <= 0)
+            Die();
+    }
+    IEnumerator HurtRoutine(Vector2 dir)
+    {
+        isHurt = true;
+        if (rb != null)
+        {
+            rb.velocity = Vector2.zero;
+            rb.AddForce(dir * knockbackForce, ForceMode2D.Impulse);
+        }
+        yield return new WaitForSeconds(0.3f);
+        isHurt = false;
+    }
+    void Die()
+    {
+        if (anim != null)
+            anim.SetTrigger("Die");
+
+        this.enabled = false;
+    }
+    IEnumerator HitStop()
+    {
+        isHitStopping = true;
+        float originalTimeScale = Time.timeScale;
+        Time.timeScale = 0f;
+        yield return new WaitForSecondsRealtime(hitStopTime);
+        Time.timeScale = originalTimeScale;
+        isHitStopping = false;
+    }
+    void OnDrawGizmosSelected()
+    {
+        if (attackPoint != null)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(attackPoint.position, attackRange);
+        }
     }
 }
