@@ -1,17 +1,24 @@
 using UnityEngine;
 using System.Collections;
-public class PlayerAttack : MonoBehaviour
+public class Combat : MonoBehaviour
 {
     [Header("Attack Settings")]
     public Transform attackPoint;
     public float attackRange = 0.5f;
     public LayerMask enemyLayer;
-    public float damage = 10f;
+    public int damage = 10;
     [Header("Combo Settings")]
     public float comboReset = 0.6f;
     private int comboStep = 0;
     private float lastAttackTime;
     private bool canAttack = true;
+    [Header("Special Attack")]
+    public float specialMeter = 0f;
+    public float maxSpecial = 100f;
+    public float specialFillPerHit = 10f;
+    public float specialDamageMultiplier = 2.5f;
+    private bool specialReady = false;
+
     [Header("Player Health")]
     public int maxHealth = 100;
     private int currentHealth;
@@ -20,6 +27,8 @@ public class PlayerAttack : MonoBehaviour
     public float knockbackForce = 5f;
     public float hitStopTime = 0.05f;
     private bool isHitStopping = false;
+    private bool isAttacking = false;
+
     public Animator anim;
     private Rigidbody2D rb;
     void Start()
@@ -33,6 +42,10 @@ public class PlayerAttack : MonoBehaviour
         {
             HandleAttack();
         }
+        if (Input.GetKeyDown(KeyCode.K) && specialReady)
+        {
+            PerformSpecialAttack();
+        }
         if (Time.time - lastAttackTime > comboReset)
         {
             comboStep = 0;
@@ -40,10 +53,11 @@ public class PlayerAttack : MonoBehaviour
     }
     void HandleAttack()
     {
+        isAttacking = true;
         canAttack = false;
         lastAttackTime = Time.time;
         comboStep++;
-
+        // DealDamage(); 
         if (comboStep > 5) comboStep = 1;
 
         if (anim != null)
@@ -63,6 +77,7 @@ public class PlayerAttack : MonoBehaviour
             if (enemyScript != null)
             {
                 enemyScript.TakeDamage(damage);
+                FillSpecialMeter();
                 Rigidbody2D enemyRb = enemy.GetComponent<Rigidbody2D>();
                 if (enemyRb != null)
                 {
@@ -73,9 +88,60 @@ public class PlayerAttack : MonoBehaviour
                     StartCoroutine(HitStop());
             }
         }
+        Debug.Log("Hit detected");
+
     }
+    void FillSpecialMeter()
+    {
+        if (specialReady) return;
+
+        specialMeter += specialFillPerHit;
+
+        if (specialMeter >= maxSpecial)
+        {
+            specialMeter = maxSpecial;
+            specialReady = true;
+            Debug.Log("Special Ready!");
+        }
+    }
+    void PerformSpecialAttack()
+    {
+        Debug.Log("SPECIAL ATTACK!");
+
+        Collider2D[] enemies = Physics2D.OverlapCircleAll(
+            attackPoint.position,
+            attackRange + 1.5f,   // bigger radius
+            enemyLayer
+        );
+
+        foreach (Collider2D enemy in enemies)
+        {
+            Enemy enemyScript = enemy.GetComponent<Enemy>();
+            if (enemyScript != null)
+            {
+                int finalDamage = Mathf.RoundToInt(damage * specialDamageMultiplier);
+                enemyScript.TakeDamage(finalDamage);
+            }
+        }
+        StartCoroutine(SpecialSlowMo());
+        ResetSpecialMeter();
+    }
+    void ResetSpecialMeter()
+    {
+        specialMeter = 0f;
+        specialReady = false;
+    }
+    IEnumerator SpecialSlowMo()
+    {
+        Time.timeScale = 0.5f;
+        yield return new WaitForSecondsRealtime(0.2f);
+        Time.timeScale = 1f;
+    }
+
+
     public void EndAttack()
     {
+        isAttacking = false;
         canAttack = true;
     }
     public void TakeDamage(int damageAmount, Vector2 knockbackDir)
@@ -88,12 +154,17 @@ public class PlayerAttack : MonoBehaviour
         if (currentHealth <= 0)
             Die();
     }
+    public bool IsAttacking()
+    {
+        return isAttacking;
+    }
+
     IEnumerator HurtRoutine(Vector2 dir)
     {
         isHurt = true;
         if (rb != null)
         {
-            rb.velocity = Vector2.zero;
+            rb.linearVelocity = Vector2.zero;
             rb.AddForce(dir * knockbackForce, ForceMode2D.Impulse);
         }
         yield return new WaitForSeconds(0.3f);
