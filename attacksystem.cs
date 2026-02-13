@@ -63,34 +63,57 @@ public class Combat : MonoBehaviour
         if (anim != null)
             anim.SetTrigger("Attack" + comboStep);
     }
-    public void DealDamage()
-    {
-        if (attackPoint == null) return;
-        Collider2D[] enemies = Physics2D.OverlapCircleAll(
-            attackPoint.position,
-            attackRange,
-            enemyLayer
-        );
-        foreach (Collider2D enemy in enemies)
-        {
-            Enemy enemyScript = enemy.GetComponent<Enemy>();
-            if (enemyScript != null)
-            {
-                enemyScript.TakeDamage(damage);
-                FillSpecialMeter();
-                Rigidbody2D enemyRb = enemy.GetComponent<Rigidbody2D>();
-                if (enemyRb != null)
-                {
-                    Vector2 dir = (enemy.transform.position - transform.position).normalized;
-                    enemyRb.AddForce(dir * knockbackForce, ForceMode2D.Impulse);
-                }
-                if (!isHitStopping)
-                    StartCoroutine(HitStop());
-            }
-        }
-        Debug.Log("Hit detected");
+public void DealDamage()
+{
+    if (attackPoint == null) return;
 
+    Collider2D[] enemies = Physics2D.OverlapCircleAll(
+        attackPoint.position,
+        attackRange,
+        enemyLayer
+    );
+
+    foreach (Collider2D enemy in enemies)
+    {
+        // 🔹 Normal Enemy
+        Enemy enemyScript = enemy.GetComponent<Enemy>();
+        if (enemyScript != null)
+        {
+            enemyScript.TakeDamage(damage);
+            FillSpecialMeter();
+        }
+
+        // 🔹 Final Boss
+        FinalEnemy bossScript = enemy.GetComponent<FinalEnemy>();
+        if (bossScript != null)
+        {
+            bossScript.TakeDamage(damage);
+            FillSpecialMeter();
+        }
+
+        // 🔹 Orb
+        Orb orbScript = enemy.GetComponent<Orb>();
+        if (orbScript != null)
+        {
+            orbScript.TakeDamage(damage);
+        }
+
+        // 🔹 Knockback (for anything that has Rigidbody)
+        Rigidbody2D enemyRb = enemy.GetComponent<Rigidbody2D>();
+        if (enemyRb != null)
+        {
+            Vector2 dir = (enemy.transform.position - transform.position).normalized;
+            enemyRb.AddForce(dir * knockbackForce, ForceMode2D.Impulse);
+        }
+
+        // 🔹 Hit Stop
+        if (!isHitStopping)
+            StartCoroutine(HitStop());
     }
+
+    Debug.Log("Hit detected");
+}
+
     void FillSpecialMeter()
     {
         if (specialReady) return;
